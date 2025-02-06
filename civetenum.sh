@@ -12,6 +12,7 @@ grayColor="\e[0;37m\033[1m"
 
 COLS=$(tput cols)
 ENDPOINT_NAME=""
+CVE_FLAG=false
 
 trap ctrl_c INT 
 function ctrl_c() {
@@ -20,7 +21,7 @@ function ctrl_c() {
 }
 
 function helpPanel() {
-  echo -e "${yellowColor}[+] Usage: civetenum [-h] [-n <name>] -p <ip>${endColor}\n"
+  echo -e "${yellowColor}[+] Usage: civetenum [-h] [-v] [-n <name>] -p <ip>${endColor}\n"
   exit 0
 }
 
@@ -38,14 +39,15 @@ function main() {
   echo ""
 
   generateBinSpace "$1"
-  #scanNetwork "$1"
+  scanNetwork "$1"
 
-  #echo "$1" > target.in
-  #echo $(/usr/bin/nmap -O $1) > "./nmap/system.in"
+  echo "$1" > target.in
+  echo $(/usr/bin/nmap -O $1) > "./nmap/system.in"
 
-#  if test -f ./nmap/Targeted; then
+  if [[ -f ./nmap/Targeted && "$CVE_FLAG" -eq true ]]; then
 #     searchVulnerability
-#  fi
+     echo -e "The searched CVEs will be found on content folder"   
+  fi
 
   tput cnorm; exit 0
 }
@@ -56,29 +58,14 @@ function searchVulnerability() {
    progra=($(awk '/open/ {print $7 }' ./nmap/Targeted | grep -o -E '[[:alnum:]]+' | paste -sd ' '))
 	
    for prog in "${progra[@]}"; do
-      f=$(curl -s -m 100 https://cve.circl.lu/api/browse/${prog} | jq -r '.[]')
-      found="false"
+      f=$(curl -s -m 100 https://vulnerability.circl.lu/api/browse/${prog} | jq -r '.[]')
 
-      if [ -n "$f" ]; then
-         for i in "$f[@]"; do
- 	    if [ "$i" == "$prog" ]; then
- 	       found="true"
- 	       break
- 	    fi
- 	 done
- 
-	 if [ "$found" == "true" ]; then
-            req=$(curl -s https://cve.circl.lu/api/search/$prog/$prog | jq -r '.variot[0][1].affected_products.sources[4].id')
-	    echo -e "${greenColor}[+] Vuln $req Found! ${endColor}"
-	    curl -s https://cve.circl.lu/api/cve/$req -o "./content/$req.json"
-         else
-	    for i in "$f[@]"; do
-	       req=$(curl -s https://cve.circl.lu/api/search/$prog/${i} | jq -r '.variot[0][1].affected_products.sources[4].id')
-	       echo -e "${greenColor}[+] Vuln $req Found! ${endColor}"
-	       curl -s https://cve.circl.lu/api/cve/$req -o "./content/$req.json"
-	    done
-         fi
-      fi
+      for i in "$f[@]"; do
+	 # aqui debe validar si el producto tiene relación con lo hayado
+      	 req=$(curl -s https://vulnerability.circl.lu/api/search/$prog/${i} | jq -r '.variot[0][1].affected_products.sources[4].id')
+ 	 echo -e "${greenColor}[+] Vuln $req Found! ${endColor}"
+ 	 curl -s https://vulnerability.circl.lu/api/cve/$req -o "./content/$req.json"
+       done
    done
 }
 
@@ -151,11 +138,12 @@ function scanNetwork() {
 
 # execution
 ipv=""
-declare -i parameter_counter=0; while getopts ":p:n:h" arg; do
+declare -i parameter_counter=0; while getopts ":p:n:h:v" arg; do
   case $arg in
     h) helpPanel;;
     p) ipv=$OPTARG; parameter_counter+=1;;
     n) ENDPOINT_NAME=$OPTARG;;
+    v) CVE_FLAG=true;;
     :) echo -e "\n${redColor}[-] Option -${OPTARG} requires an argument.${endColor}"; exit 1;;
     ?) echo -e "\n${redColor} [-] Invalid option: -${OPTARG}${endColor}"; exit 1;;
   esac
