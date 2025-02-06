@@ -30,24 +30,26 @@ function main() {
   manageRequirements
 
   tput civis; clear; echo -e "${purpleColor}"
-  figlet -f "./bulbhead.flf" CivetEnum -w ${COLS}; echo -e "${endColor}"
+  scriptdir=$(dirname $(realpath ${0}))
+  figlet -f "${scriptdir}/bulbhead.flf" CivetEnum -w ${COLS}; echo -e "${endColor}"
   echo -e "${blueColor}                -==========================-"
   echo -e "                |  author | C1Ph3r@Hacker  |"
   echo -e "                -==========================-${endColor}"
   echo -e "                    CLI TOOL: CivetEnum"
-  echo -e "                    Version: $(git rev-parse --short HEAD)"
+  echo -e "                    Version: $(git rev-parse --short HEAD 2&>/dev/null)"
   echo ""
 
   generateBinSpace "$1"
   scanNetwork "$1"
 
-  echo "$1" > target.in
-  echo $(/usr/bin/nmap -O $1) > "./nmap/system.in"
+   echo "$1" > target.in
+   echo $(/usr/bin/nmap -O $1) | grep -oP 'OS CPE: cpe:/o:[^:]+:[^:]+' | awk ' {print $3}' > "./nmap/system.in"
 
-  if [[ -f ./nmap/Targeted && "$CVE_FLAG" -eq true ]]; then
-#     searchVulnerability
-     echo -e "The searched CVEs will be found on content folder"   
-  fi
+   if test -f ./nmap/Targeted; then
+      if [[ "$CVE_FLAG" = true ]]; then
+         searchVulnerability
+      fi	 
+   fi
 
   tput cnorm; exit 0
 }
@@ -55,17 +57,19 @@ function main() {
 #see for registered CVE and CVSS
 function searchVulnerability() {
    echo -e "${turquoiseColor}[*] Searching for service registers... ${endColor}"
-   progra=($(awk '/open/ {print $7 }' ./nmap/Targeted | grep -o -E '[[:alnum:]]+' | paste -sd ' '))
-	
-   for prog in "${progra[@]}"; do
-      f=$(curl -s -m 100 https://vulnerability.circl.lu/api/browse/${prog} | jq -r '.[]')
+   progra=$(awk '/open/ {print $7}' ./nmap/Targeted | grep -o -E '[[:alnum:]]+' | paste -sd ' ')
 
-      for i in "$f[@]"; do
-	 # aqui debe validar si el producto tiene relación con lo hayado
-      	 req=$(curl -s https://vulnerability.circl.lu/api/search/$prog/${i} | jq -r '.variot[0][1].affected_products.sources[4].id')
- 	 echo -e "${greenColor}[+] Vuln $req Found! ${endColor}"
- 	 curl -s https://vulnerability.circl.lu/api/cve/$req -o "./content/$req.json"
-       done
+   for prog in "${progra[@]}"; do
+      f=$(curl -s -m 100 https://vulnerability.circl.lu/api/browse/${prog} | jq -r '.[0]')
+
+#      for i in "$f[@]"; do
+#	 # aqui debe validar si el producto tiene relación con lo hayado
+	 if [[ "$f" != " " ]]; then
+      	    req=$(curl -s https://vulnerability.circl.lu/api/search/$prog/${f} | jq -r '.variot[0][1].affected_products.sources[3].id')
+ 	    echo -e "${greenColor}[+] Vuln $req Found! ${endColor}"
+ 	    curl -s https://vulnerability.circl.lu/api/cve/$req -o "./content/$req.json"
+	 fi
+#       done
    done
 }
 
