@@ -34,21 +34,57 @@ function main() {
   echo -e "                |  author | C1Ph3r@Hacker  |"
   echo -e "                -==========================-${endColor}"
   echo -e "                    CLI TOOL: CivetEnum"
-  echo -e "                       Version: 1.0"
+  echo -e "                    Version: $(git rev-parse --short HEAD)"
   echo ""
 
   generateBinSpace "$1"
-  scanNetwork "$1"
+  #scanNetwork "$1"
 
-  echo "$1" > target.in
-  echo $(/usr/bin/nmap -O $1) > "./nmap/system.in"
+  #echo "$1" > target.in
+  #echo $(/usr/bin/nmap -O $1) > "./nmap/system.in"
+
+#  if test -f ./nmap/Targeted; then
+#     searchVulnerability
+#  fi
 
   tput cnorm; exit 0
 }
 
+#see for registered CVE and CVSS
+function searchVulnerability() {
+   echo -e "${turquoiseColor}[*] Searching for service registers... ${endColor}"
+   progra=($(awk '/open/ {print $7 }' ./nmap/Targeted | grep -o -E '[[:alnum:]]+' | paste -sd ' '))
+	
+   for prog in "${progra[@]}"; do
+      f=$(curl -s -m 100 https://cve.circl.lu/api/browse/${prog} | jq -r '.[]')
+      found="false"
+
+      if [ -n "$f" ]; then
+         for i in "$f[@]"; do
+ 	    if [ "$i" == "$prog" ]; then
+ 	       found="true"
+ 	       break
+ 	    fi
+ 	 done
+ 
+	 if [ "$found" == "true" ]; then
+            req=$(curl -s https://cve.circl.lu/api/search/$prog/$prog | jq -r '.variot[0][1].affected_products.sources[4].id')
+	    echo -e "${greenColor}[+] Vuln $req Found! ${endColor}"
+	    curl -s https://cve.circl.lu/api/cve/$req -o "./content/$req.json"
+         else
+	    for i in "$f[@]"; do
+	       req=$(curl -s https://cve.circl.lu/api/search/$prog/${i} | jq -r '.variot[0][1].affected_products.sources[4].id')
+	       echo -e "${greenColor}[+] Vuln $req Found! ${endColor}"
+	       curl -s https://cve.circl.lu/api/cve/$req -o "./content/$req.json"
+	    done
+         fi
+      fi
+   done
+}
+
 #see for required programs
 function manageRequirements() {
-  dependencies=(nmap figlet)
+  dependencies=(nmap figlet curl jq)
 
   echo -e "${yellowColor}[+] Testing dependencies...${endColor}"
 
@@ -106,10 +142,10 @@ function scanNetwork() {
   if [ "${hosts_up}" -ne "0" ]; then
     ports="$(cat ./nmap/AllPorts | grep -oP '\d{1,5}/open' | awk '{print $1}' FS='/' | xargs | tr ' ' ',' | tr -d '\n')"
     /usr/bin/nmap -p"${ports}" -vvv -sVC $1 -oN nmap/Targeted -oX nmap/Targeted.xml
-    echo -e "\n${greenColor}[v] Tarea completada!${endColor}"
+    echo -e "\n${greenColor}[v] Exploration finished!${endColor}"
 
   else
-    echo -e "\n${redColor}[x] No se encontró el host.${endColor}"
+    echo -e "\n${redColor}[x] Host not found. ${endColor}"
   fi
 }
 
@@ -126,14 +162,13 @@ declare -i parameter_counter=0; while getopts ":p:n:h" arg; do
 done
 
 if [[ "$(id -u)" == "0" ]]; then # know is its running a sudo
-  if [[ parameter_counter -lt 1 ]]; then
-    helpPanel
-  else
-    main "${ipv}"
-  fi
-
+   if [[ parameter_counter -lt 1 ]]; then
+      helpPanel
+   else
+      main "${ipv}"
+   fi
 else
-  echo -e "${redColor}[-] Root Permissions required.${endColor}\n"
-  exit 1
-
+   echo -e "${redColor}[-] Root Permissions required.${endColor}\n"
+   exit 1
 fi
+
