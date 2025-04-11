@@ -63,7 +63,7 @@ function searchVulnerability() {
       f=$(curl -s -m 100 https://vulnerability.circl.lu/api/browse/${prog} | jq -r '.[0]')
 
 #      for i in "$f[@]"; do
-#	 # aqui debe validar si el producto tiene relación con lo hayado
+#	 # validate if product is related to CVE
 	 if [[ "$f" != " " ]]; then
       	    req=$(curl -s https://vulnerability.circl.lu/api/search/$prog/${f} | jq -r '.variot[0][1].affected_products.sources[3].id')
  	    echo -e "${greenColor}[+] Vuln $req Found! ${endColor}"
