@@ -1,5 +1,5 @@
 # CIVETENUM
-script para automatizar la enumeración de puertos de un dispositivo endpoint
+script to automate port enumeration of an endpoint device.
 
 # Usage
 
